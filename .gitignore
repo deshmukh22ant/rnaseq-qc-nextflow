@@ -1,0 +1,24 @@
+# Nextflow generated
+work/
+.nextflow/
+.nextflow.log*
+results/
+
+# Execution reports
+report.html
+timeline.html
+dag.html
+*.html
+
+# Data files (belong in S3/archives, not git)
+*.fastq
+*.fastq.gz
+*.fq.gz
+*.bam
+
+# OS junk
+.DS_Store
+
+# Editor / env
+.vscode/
+.idea/
