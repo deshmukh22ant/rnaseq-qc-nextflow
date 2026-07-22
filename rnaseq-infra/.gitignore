@@ -1,0 +1,25 @@
+# Nextflow
+work/
+.nextflow/
+.nextflow.log*
+
+# Terraform (generated, not versioned)
+.terraform/
+.terraform.lock.hcl
+terraform.tfstate
+terraform.tfstate.*
+*.tfvars
+.terraformrc
+
+# Results
+results/
+outputs/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+*.pyc
+__pycache__/
