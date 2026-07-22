@@ -34,8 +34,13 @@ jobs:
 
       - name: Run pipeline with test data
         run: |
+          cat <<EOF > ci.config
+          docker.runOptions = '-v $PWD:$PWD'
+          process.stageInMode = 'copy'
+          EOF
           nextflow run main.nf \
             -profile docker \
+            -c ci.config \
             --input test-data/test_samplesheet.csv \
             --outdir results
 
