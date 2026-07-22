@@ -29,3 +29,5 @@ dag.html
 terraform.tfstate
 terraform.tfstate.*
 *.tfvars
+.terraformrc
+*.backup
