@@ -17,6 +17,15 @@ jobs:
       - name: Install Nextflow
         uses: nf-core/setup-nextflow@v2
 
+      - name: Install bioinformatics tools
+        run: |
+          wget -q http://opengene.org/fastp/fastp.0.23.4
+          chmod +x fastp.0.23.4
+          sudo mv fastp.0.23.4 /usr/local/bin/fastp
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq fastqc
+          pip install -q multiqc
+
       - name: Generate test data
         run: |
           mkdir -p test-data
@@ -30,17 +39,12 @@ jobs:
                   f.write(b'IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII\n')
           "
           echo "sample,fastq" > test-data/test_samplesheet.csv
-          echo "test_sample,$PWD/test-data/test_sample.fastq.gz" >> test-data/test_samplesheet.csv
+          echo "test_sample,test-data/test_sample.fastq.gz" >> test-data/test_samplesheet.csv
 
       - name: Run pipeline with test data
         run: |
-          cat <<EOF > ci.config
-          docker.runOptions = '-v $PWD:$PWD'
-          process.stageInMode = 'copy'
-          EOF
           nextflow run main.nf \
-            -profile docker \
-            -c ci.config \
+            -profile local \
             --input test-data/test_samplesheet.csv \
             --outdir results
 
