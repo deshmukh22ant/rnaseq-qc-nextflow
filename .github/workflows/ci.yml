@@ -19,9 +19,11 @@ jobs:
 
       - name: Run pipeline with test data
         run: |
+          echo "sample,fastq" > ci_samplesheet.csv
+          echo "test_sample,$PWD/test-data/test_sample.fastq.gz" >> ci_samplesheet.csv
           nextflow run main.nf \
             -profile docker \
-            --input test-data/test_samplesheet.csv \
+            --input ci_samplesheet.csv \
             --outdir results
 
       - name: Verify outputs exist
