@@ -1,0 +1,33 @@
+name: Pipeline CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test-pipeline:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Install Nextflow
+        uses: nf-core/setup-nextflow@v2
+
+      - name: Run pipeline with test data
+        run: |
+          nextflow run main.nf \
+            -profile docker \
+            --input test-data/test_samplesheet.csv \
+            --outdir results
+
+      - name: Verify outputs exist
+        run: |
+          echo "--- Checking pipeline outputs ---"
+          test -d results/fastp   && echo "✅ fastp output exists"   || (echo "❌ fastp missing"   && exit 1)
+          test -d results/fastqc  && echo "✅ fastqc output exists"  || (echo "❌ fastqc missing"  && exit 1)
+          test -f results/multiqc/multiqc_report.html && echo "✅ MultiQC report exists" || (echo "❌ MultiQC report missing" && exit 1)
+          echo "--- All outputs verified ---"
