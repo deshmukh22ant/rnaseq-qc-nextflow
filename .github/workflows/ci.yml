@@ -29,15 +29,17 @@ jobs:
       - name: Generate test data
         run: |
           mkdir -p test-data
-          python3 -c "
+          python3 << 'EOF'
           import gzip
           with gzip.open('test-data/test_sample.fastq.gz', 'wb') as f:
+              seq = 'ATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCG'
+              qual = 'I' * len(seq)
               for i in range(1, 1001):
                   f.write(f'@READ_{i}\n'.encode())
-                  f.write(b'ATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCG\n')
+                  f.write(seq.encode() + b'\n')
                   f.write(b'+\n')
-                  f.write(b'IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII\n')
-          "
+                  f.write(qual.encode() + b'\n')
+          EOF
           echo "sample,fastq" > test-data/test_samplesheet.csv
           echo "test_sample,test-data/test_sample.fastq.gz" >> test-data/test_samplesheet.csv
 
