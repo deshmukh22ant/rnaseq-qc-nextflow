@@ -17,25 +17,30 @@ jobs:
       - name: Install Nextflow
         uses: nf-core/setup-nextflow@v2
 
+      - name: Generate test data
+        run: |
+          mkdir -p test-data
+          python3 -c "
+          import gzip
+          with gzip.open('test-data/test_sample.fastq.gz', 'wb') as f:
+              for i in range(1, 1001):
+                  f.write(f'@READ_{i}\n'.encode())
+                  f.write(b'ATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCG\n')
+                  f.write(b'+\n')
+                  f.write(b'IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII\n')
+          "
+          echo "sample,fastq" > test-data/test_samplesheet.csv
+          echo "test_sample,$PWD/test-data/test_sample.fastq.gz" >> test-data/test_samplesheet.csv
+
       - name: Run pipeline with test data
         run: |
-          echo "sample,fastq" > ci_samplesheet.csv
-          echo "test_sample,$PWD/test-data/test_sample.fastq.gz" >> ci_samplesheet.csv
-          cat <<NFEOF > ci.config
-          docker.fixOwnership = true
-          docker.runOptions = '-v $PWD:$PWD'
-          process.stageInMode = 'copy'
-          NFEOF
           nextflow run main.nf \
             -profile docker \
-            -c ci.config \
-            --input ci_samplesheet.csv \
+            --input test-data/test_samplesheet.csv \
             --outdir results
 
       - name: Verify outputs exist
         run: |
-          echo "--- Checking pipeline outputs ---"
           test -d results/fastp   && echo "✅ fastp output exists"   || (echo "❌ fastp missing"   && exit 1)
           test -d results/fastqc  && echo "✅ fastqc output exists"  || (echo "❌ fastqc missing"  && exit 1)
           test -f results/multiqc/multiqc_report.html && echo "✅ MultiQC report exists" || (echo "❌ MultiQC report missing" && exit 1)
-          echo "--- All outputs verified ---"
