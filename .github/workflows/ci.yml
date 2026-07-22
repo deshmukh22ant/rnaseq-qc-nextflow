@@ -21,8 +21,14 @@ jobs:
         run: |
           echo "sample,fastq" > ci_samplesheet.csv
           echo "test_sample,$PWD/test-data/test_sample.fastq.gz" >> ci_samplesheet.csv
+          cat <<NFEOF > ci.config
+          docker.fixOwnership = true
+          docker.runOptions = '-v $PWD:$PWD'
+          process.stageInMode = 'copy'
+          NFEOF
           nextflow run main.nf \
             -profile docker \
+            -c ci.config \
             --input ci_samplesheet.csv \
             --outdir results
 
