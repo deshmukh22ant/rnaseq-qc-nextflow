@@ -22,3 +22,10 @@ dag.html
 # Editor / env
 .vscode/
 .idea/
+
+# Terraform
+.terraform/
+.terraform.lock.hcl
+terraform.tfstate
+terraform.tfstate.*
+*.tfvars
