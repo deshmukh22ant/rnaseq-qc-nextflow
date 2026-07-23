@@ -1,146 +1,173 @@
-# rnaseq-qc — A Containerized Nextflow QC Pipeline
 
-A reproducible, containerized [Nextflow](https://www.nextflow.io/) pipeline that performs quality control on RNA-seq sequencing data: it trims raw reads, checks their quality, and aggregates the results into a single report. Built as the scientific-workflow layer of a larger discovery data platform.
 
-> **Status:** Working locally on real sequencing data. Cloud execution (Seqera Platform / AWS Batch) and a downstream Databricks lakehouse are the planned next phases — see [Roadmap](#roadmap).
-
----
-
-## The problem this solves
-
-Before any genomic analysis can be trusted, the raw sequencing data has to be **quality-checked and cleaned** — and this has to happen consistently across every sample, every run, and every environment. Doing it by hand doesn't scale or reproduce:
-
-- **Manual QC doesn't scale.** A study can have hundreds or thousands of samples. Running a tool on each one by hand, then comparing hundreds of individual reports, is slow and error-prone.
-- **Tool environments conflict.** Each bioinformatics tool needs specific versions and dependencies; installing them all on one machine causes conflicts and "works on my machine" failures.
-- **Results must be reproducible.** In a research/regulated setting, a run has to produce identical results months later — which is impossible if tool versions drift.
-- **It has to run anywhere.** The same analysis needs to move from a laptop to an HPC cluster to the cloud without being rewritten.
-
-This pipeline solves that: it **automates and standardizes the QC + trimming step** so that any number of samples are processed identically, in parallel, each tool in its own pinned container, with one combined report at the end — and the *same* pipeline runs unchanged locally or in the cloud. It's the reproducible, scalable front door to a larger scientific data platform, where cleaned results feed downstream analytics (see [Roadmap](#roadmap)).
-
----
-
-## What it does
-
+Readme final · MD
+# RNA-seq Quality Control Data Platform
+ 
+An end-to-end bioinformatics data engineering platform that processes RNA sequencing data through a containerized pipeline, orchestrates execution on AWS cloud infrastructure, and delivers analytics-ready insights via a Databricks lakehouse.
+ 
+![Architecture](architecture-final.jpg)
+ 
+## Overview
+ 
+This project takes raw RNA sequencing data from a public archive, runs it through a quality-control pipeline, executes it at scale on AWS, and transforms the resulting metrics into analytics-ready tables using a Medallion architecture in Databricks. Every layer is automated, reproducible, and cost-optimized.
+ 
+## Architecture
+ 
 ```
-FASTQ reads  →  fastp (trim)  →  FastQC (QC trimmed reads)  →  MultiQC (combined report)
+Raw FASTQ (ENA)
+      |
+Nextflow Pipeline  (FASTP -> FastQC -> MultiQC)   [Docker containers]
+      |
+GitHub Actions CI/CD   [automated testing on every push]
+      |
+Seqera Platform   [orchestration & monitoring]
+      |
+AWS Batch   [parallel cloud execution]
+      |
+Amazon S3   [results storage]
+      |
+Databricks Lakehouse   [Bronze -> Silver -> Gold]
+      |
+Analytics-ready insights
 ```
-
-- **fastp** — trims low-quality bases and adapters from raw reads; emits cleaned FASTQ + a QC report.
-- **FastQC** — runs quality control on the trimmed reads (one task per sample, in parallel).
-- **MultiQC** — aggregates the fastp and FastQC reports into a single interactive HTML dashboard.
-
-Each step runs in its own **version-pinned container**, so results are reproducible across machines.
-
----
-
-## Pipeline design
-
-- **Dataflow model:** processes connected by channels; the workflow infers execution order.
-- **Fan-out:** the samplesheet becomes a channel — one parallel task per sample.
-- **Fan-in:** `MultiQC` gathers every tool's report via `.mix()` + `.collect()` into one run.
-- **Portable:** pipeline logic is separated from infrastructure — the same code runs locally or on the cloud by switching a config profile.
-
----
-
-## Repository structure
-
+ 
+## Technology Stack
+ 
+| Layer | Technology | Purpose |
+|-------|-----------|---------|
+| Workflow | Nextflow (DSL2) | Pipeline orchestration |
+| Containers | Docker | Reproducible tool environments |
+| CI/CD | GitHub Actions | Automated testing on every push |
+| Monitoring | Seqera Platform | Real-time execution dashboard |
+| Compute | AWS Batch | Scalable cloud execution |
+| Storage | Amazon S3 | Persistent results storage |
+| IaC | Terraform | Infrastructure provisioning |
+| Analytics | Databricks | Lakehouse & Medallion architecture |
+| Data Format | Delta Lake | ACID-compliant storage |
+| Access Control | Unity Catalog | Secure credential management |
+ 
+## Pipeline Components
+ 
+### Nextflow Pipeline
+ 
+Three modular processes running in a fan-out / fan-in pattern, each in a pinned Docker container:
+ 
+- **FASTP** — Trims low-quality bases and adapters from raw reads
+- **FastQC** — Generates per-sample quality control reports
+- **MultiQC** — Aggregates all sample reports into a single JSON summary
+### Infrastructure (Terraform)
+ 
+Provisions AWS resources declaratively: S3 bucket, AWS Batch compute environment (Spot instances for task jobs, on-demand for the head job), IAM roles with least-privilege access, and job queues.
+ 
+### CI/CD (GitHub Actions)
+ 
+Every code push triggers automated validation: generates synthetic test FASTQ data, runs the full pipeline locally, verifies expected outputs exist, and blocks the merge if tests fail.
+ 
+### Databricks Medallion Architecture
+ 
+Transforms raw metrics into analytics-ready data across three layers using PySpark and Delta Lake:
+ 
+- **Bronze** — Raw ingestion of MultiQC JSON from S3 (immutable audit trail)
+- **Silver** — Validated and cleaned metrics with quality gates applied
+- **Gold** — Aggregated business summaries
+Secure S3 access is configured through Unity Catalog (storage credential linked to an AWS IAM role, plus an external location) with no hardcoded credentials anywhere in the code.
+ 
+## Getting Started
+ 
+### Prerequisites
+ 
+- Nextflow 24.04+
+- Docker
+- AWS account with configured credentials
+- Terraform 1.5+
+- Databricks workspace with Unity Catalog
+### Run Locally
+ 
+```bash
+nextflow run main.nf \
+  -profile docker \
+  --input samplesheet.csv \
+  --outdir results
+```
+ 
+### Run on AWS via Seqera
+ 
+```bash
+export TOWER_ACCESS_TOKEN=<your-token>
+nextflow run main.nf -profile docker -with-tower
+```
+ 
+Launch parameters:
+ 
+```json
+{
+  "input": "https://raw.githubusercontent.com/deshmukh22ant/rnaseq-qc-nextflow/main/samplesheet.csv",
+  "outdir": "s3://your-bucket/results"
+}
+```
+ 
+### Provision Infrastructure
+ 
+```bash
+cd rnaseq-infra
+terraform init
+terraform plan
+terraform apply
+```
+ 
+## Repository Structure
+ 
 ```
 rnaseq-qc/
-├── main.nf                 # workflow wiring (fastp → FastQC → MultiQC)
-├── nextflow.config         # params, docker profile, resource limits
-├── samplesheet.csv         # input samples (sample_id, fastq URL)
+├── main.nf                         # Workflow orchestration
+├── nextflow.config                 # Pipeline configuration
+├── samplesheet.csv                 # Input sample definitions
 ├── modules/
-│   ├── fastp.nf            # trimming process
-│   ├── fastqc.nf           # quality-control process
-│   └── multiqc.nf          # report-aggregation process
+│   ├── fastp.nf                    # Trimming process
+│   ├── fastqc.nf                   # QC process
+│   └── multiqc.nf                  # Aggregation process
+├── .github/workflows/
+│   └── ci.yml                      # CI/CD pipeline
+├── test-data/                      # Synthetic test data
+├── rnaseq-infra/
+│   └── main.tf                     # Terraform infrastructure
+├── rnaseq-qc-medallion-pipeline/   # Databricks notebook
+├── architecture-final.jpg          # Architecture diagram
 └── README.md
 ```
-
-Generated at runtime (git-ignored): `work/`, `results/`, `.nextflow/`, execution reports.
-
----
-
-## Input
-
-A CSV samplesheet with a header and one row per sample:
-
-```csv
-sample,fastq
-SRR11028503,https://ftp.sra.ebi.ac.uk/vol1/fastq/SRR110/003/SRR11028503/SRR11028503.fastq.gz
-SRR11028506,https://ftp.sra.ebi.ac.uk/vol1/fastq/SRR110/006/SRR11028506/SRR11028506.fastq.gz
-```
-
-Sample data is sourced from the [European Nucleotide Archive (ENA)](https://www.ebi.ac.uk/ena) — real single-end RNA-seq reads, not synthetic test data.
-
----
-
-## Requirements
-
-- [Nextflow](https://www.nextflow.io/) (Java 17+)
-- [Docker](https://www.docker.com/) (Docker Desktop on macOS/Windows)
-
-No bioinformatics tools need to be installed locally — each runs in its container.
-
----
-
-## Usage
-
-```bash
-# Run locally with Docker
-nextflow run main.nf -profile docker
-
-# Resume a previous run (reuses cached completed tasks)
-nextflow run main.nf -profile docker -resume
-
-# Override parameters
-nextflow run main.nf -profile docker --input my_samplesheet.csv --outdir my_results
-```
-
-### Output
-
-```
-results/
-├── fastp/      # trimmed reads + fastp JSON reports
-├── fastqc/     # per-sample FastQC reports
-└── multiqc/
-    └── multiqc_report.html   # ← open this: combined QC dashboard
-```
-
-Open the report:
-
-```bash
-open results/multiqc/multiqc_report.html
-```
-
----
-
-## Configuration notes
-
-- **Pinned containers** — every process pins an exact image version (no `:latest`) for reproducibility.
-- **Resource limits** — per-process `cpus`/`memory` declared in `nextflow.config`.
-- **Concurrency control** — `executor.queueSize` caps parallel tasks so local runs don't exhaust memory. (In the cloud, per-task instances remove this constraint.)
-
----
-
-## Engineering notes (real issues solved)
-
-- **Docker mount permission (exit 125):** macOS protects `~/Documents`; relocated the project so Docker could mount the work directory.
-- **Out-of-memory kills (exit 137):** too many memory-heavy tasks running in parallel on real data — resolved by declaring per-process memory and capping concurrency with `executor.queueSize`. This is also the motivation for cloud execution, where AWS Batch right-sizes an instance per task.
-- **Debugging approach:** inspect the failed task's work directory (`.command.sh`, `.command.err`, `.exitcode`) to find the exact cause.
-
----
-
-## Roadmap
-
-- [x] Multi-stage containerized pipeline (fastp → FastQC → MultiQC), working locally on real ENA data
-- [ ] Automated data ingestion (ENA API → samplesheet generation)
-- [ ] CI/CD — GitHub Actions: lint + test profile on every push
-- [ ] Cloud execution via Seqera Platform on AWS Batch (S3 work directory, Spot instances)
-- [ ] Infrastructure-as-Code — Terraform for S3 / IAM / AWS Batch
-- [ ] Downstream Databricks lakehouse — medallion (Bronze/Silver/Gold), Delta Lake, Unity Catalog
-
----
-
-## Tech stack
-
-Nextflow · Docker · fastp · FastQC · MultiQC · BioContainers · (planned: Seqera Platform, AWS Batch, S3, Terraform, Databricks)
+ 
+## Key Engineering Decisions
+ 
+**Spot instances for cost efficiency** — Task jobs run on Spot instances (up to 70% cheaper), while the stateful Nextflow head job uses on-demand instances for stability. Total cost per run is roughly $0.03 versus $0.12 for all on-demand — a 75% saving.
+ 
+**Pinned container versions** — All tool containers use exact version tags for byte-for-byte reproducibility across local, CI, and cloud environments.
+ 
+**Dynamic sample detection** — The Databricks pipeline auto-detects samples from the MultiQC output, scaling from 2 to thousands of samples without code changes.
+ 
+**Infrastructure as code** — All AWS resources are provisioned via Terraform, making the infrastructure reproducible, version-controlled, and auditable.
+ 
+**Secure credential management** — Databricks accesses S3 through Unity Catalog storage credentials and external locations, avoiding any hardcoded secrets in code or version control.
+ 
+## Sample Results
+ 
+The Gold layer produces aggregated quality metrics:
+ 
+| Metric | Value | Description |
+|--------|-------|-------------|
+| avg_q30_quality | 92.9% | Average percentage of bases with Q30+ quality |
+| avg_pct_surviving | 99.97% | Average percentage of reads surviving trimming |
+| total_samples | 2 | Number of samples processed |
+ 
+## Debugging Highlights
+ 
+Real issues resolved during development, demonstrating end-to-end ownership:
+ 
+- **Docker mount permission (exit 125)** — macOS Docker Desktop path restrictions; resolved by relocating the working directory.
+- **Out-of-memory kills (exit 137)** — Parallel tasks exhausting RAM; resolved with per-process memory limits and concurrency caps.
+- **FASTQ validation** — Test data with mismatched sequence/quality lengths; resolved with dynamic quality-string generation.
+- **AWS Batch stuck RUNNABLE** — Head job requesting Spot instances; resolved by separating on-demand (head) and Spot (task) queues via Batch Forge.
+- **S3 access from Databricks** — Configured Unity Catalog storage credential with a self-assuming IAM role and external location.
+## License
+ 
+MIT
+ 
